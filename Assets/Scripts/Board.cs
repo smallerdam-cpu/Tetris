@@ -1,5 +1,6 @@
 using UnityEngine;
 using TMPro;
+using UnityEngine.UI;
 
 public class Board : MonoBehaviour
 {
@@ -9,18 +10,15 @@ public class Board : MonoBehaviour
     private int totalLinesCleared = 0;
 
     [Header("Textos de Bonus")]
-    public string bonusText1 = "BONUS!";
-    public string bonusText2 = "DOUBLE BONUS!";
-    public string bonusText3 = "TRIPLE BONUS!";
-    public string bonusText4 = "MEGA BONUS!";
+    public Sprite combo1Image; // Imagen para la linea 1 
+    public Sprite combo2Image; // imagen para la linea 2
+    public Sprite combo3Image; // imagen para la linea 3
+    public Sprite combo4Image; // imagen para COMBO linea 4
 
     [Header("Posición de Puntos Flotantes")]
     public Vector2 floatingPointsDirection = new Vector2(200, 400);
     public float floatingPointsDuration = 1f;
-
-    [Header("Colores de Puntos Flotantes")]
     public Color pointsTextColor = Color.yellow;
-    public Color bonusTextColor = Color.green;
 
     void Awake()
     {
@@ -79,29 +77,18 @@ public class Board : MonoBehaviour
             int[] scoreValues = { 0, 100, 300, 500, 800 };
             int points = scoreValues[Mathf.Min(linesCleared, 4)];
 
-            // Texto de bonus según líneas
-            string bonusText = "";
+            // NUEVO: Asignar imagen según líneas
+            Sprite comboSprite = null;
             switch (linesCleared)
             {
-                case 1:
-                    bonusText = bonusText1;
-                    break;
-                case 2:
-                    bonusText = bonusText2;
-                    break;
-                case 3:
-                    bonusText = bonusText3;
-                    break;
-                case 4:
-                    bonusText = bonusText4;
-                    break;
-                default:
-                    bonusText = "INCREDIBLE!";
-                    break;
+                case 1: comboSprite = combo1Image; break;
+                case 2: comboSprite = combo2Image; break;
+                case 3: comboSprite = combo3Image; break;
+                case 4: comboSprite = combo4Image; break;
             }
 
-            // Mostrar puntos flotantes
-            ShowFloatingPoints(points, bonusText);
+            // Mostrar puntos flotantes y la imagen
+            ShowFloatingPoints(points, comboSprite);
 
             int previousLevel = GameManager.Instance.level;
             GameManager.Instance.AddScore(points);
@@ -196,6 +183,7 @@ public class Board : MonoBehaviour
 
     public void ClearBoard()
     {
+        // 1. Limpiamos los bloques individuales que están guardados en la matriz
         for (int y = 0; y < height; y++)
         {
             for (int x = 0; x < width; x++)
@@ -208,11 +196,15 @@ public class Board : MonoBehaviour
             }
         }
 
-        // Destruir todos los tetrominos activos
-        Tetromino[] tetrominos = FindObjectsOfType<Tetromino>();
-        foreach (Tetromino t in tetrominos)
+        // 2. Aspiradora total: Buscamos todos los objetos sueltos en la escena
+        GameObject[] allObjects = FindObjectsOfType<GameObject>();
+        foreach (GameObject obj in allObjects)
         {
-            Destroy(t.gameObject);
+            // Si el objeto es un clon de una pieza o un fantasma, lo destruimos sin piedad
+            if ((obj.name.Contains("Tetromino") && obj.name.Contains("(Clone)")) || obj.name.Contains("GhostPiece"))
+            {
+                Destroy(obj);
+            }
         }
     }
 
@@ -237,31 +229,42 @@ public class Board : MonoBehaviour
         }
     }
 
-    void ShowFloatingPoints(int points, string bonusText)
+    void ShowFloatingPoints(int points, Sprite comboSprite)
     {
-        // Crear un objeto temporal para mostrar los puntos
         Canvas canvas = FindObjectOfType<Canvas>();
         if (canvas == null) return;
 
-        // Crear un GameObject con TextMeshProUGUI
+        // Crear contenedor principal
         GameObject floatingObj = new GameObject("FloatingPoints");
         floatingObj.transform.SetParent(canvas.transform, false);
-
-        // Agregar TextMeshProUGUI
-        TextMeshProUGUI tmpText = floatingObj.AddComponent<TextMeshProUGUI>();
-        RectTransform rectTransform = floatingObj.GetComponent<RectTransform>();
-
-        // Posición inicial: centro del tablero
+        RectTransform rectTransform = floatingObj.AddComponent<RectTransform>();
         rectTransform.anchoredPosition = Vector3.zero;
-        rectTransform.sizeDelta = new Vector2(400, 200);
 
-        // Agregar script FloatingPoints
+        // Configurar texto numérico
+        TextMeshProUGUI tmpText = floatingObj.AddComponent<TextMeshProUGUI>();
+        tmpText.text = $"+{points}";
+        tmpText.fontSize = 50;
+        tmpText.fontStyle = FontStyles.Bold;
+        tmpText.alignment = TextAlignmentOptions.Center;
+        tmpText.color = pointsTextColor;
+
+        // Configurar Imagen de Combo
+        Image imgComp = null;
+        if (comboSprite != null)
+        {
+            GameObject imgObj = new GameObject("ComboImage");
+            imgObj.transform.SetParent(floatingObj.transform, false);
+            imgComp = imgObj.AddComponent<Image>();
+            imgComp.sprite = comboSprite;
+            imgComp.SetNativeSize(); // Ajusta automáticamente al tamaño real de tu sprite
+            
+            // Posicionar la imagen ligeramente arriba del texto
+            imgObj.GetComponent<RectTransform>().anchoredPosition = new Vector2(0, 80);
+        }
+
         FloatingPoints floatingPoints = floatingObj.AddComponent<FloatingPoints>();
-
-        // Posición destino: usar la configuración personalizada
         Vector3 targetPos = new Vector3(floatingPointsDirection.x, floatingPointsDirection.y, 0);
-
-        // Inicializar la animación con colores personalizados
-        floatingPoints.Initialize(rectTransform.position, targetPos, points, bonusText, floatingPointsDuration, pointsTextColor, bonusTextColor);
+        
+        floatingPoints.Initialize(rectTransform.position, targetPos, floatingPointsDuration, imgComp);
     }
 }

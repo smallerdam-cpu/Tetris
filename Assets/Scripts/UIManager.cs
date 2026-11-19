@@ -19,6 +19,8 @@ public class UIManager : MonoBehaviour
     public LoadingScreen loadingScreen; // Pantalla de carga
     public CountdownScreen countdownScreen; // Cuenta regresiva
     public MenuStatsDisplay menuStatsDisplay; // Estadísticas del menú
+    public GameObject settingsPanel; // Nuevo panel de ajustes
+    public Toggle fullscreenToggle; // Preparado para la pantalla completa
 
     void Start()
     {
@@ -37,6 +39,13 @@ public class UIManager : MonoBehaviour
                 sfxVolumeSlider.value = AudioManager.Instance.sfxVolume;
             sfxVolumeSlider.onValueChanged.AddListener(OnSfxVolumeChanged);
         }
+        
+                //configurar toggle de pantalla
+        if (fullscreenToggle != null)
+        {
+            fullscreenToggle.isOn = Screen.fullScreen;
+            fullscreenToggle.onValueChanged.AddListener(OnFullscreenToggle);
+        }
 
         // Solo mostrar el menú si no hay jugador activo
         if (string.IsNullOrEmpty(GameManager.Instance.playerName))
@@ -49,6 +58,8 @@ public class UIManager : MonoBehaviour
             UpdateScore(GameManager.Instance.score);
             UpdateLevel(GameManager.Instance.level);
         }
+
+        if (settingsPanel != null) settingsPanel.SetActive(false);
     }
 
     void Update()
@@ -76,20 +87,24 @@ public class UIManager : MonoBehaviour
         if (pausePanel != null) pausePanel.SetActive(false);
         if (gameOverPanel != null) gameOverPanel.SetActive(false);
 
-        // Actualizar estadísticas del menú
         if (menuStatsDisplay != null)
         {
             menuStatsDisplay.UpdateStats();
         }
 
-        // Limpiar el tablero y detener todo
         Board board = FindObjectOfType<Board>();
         if (board != null) board.ClearBoard();
+        
         GameManager.Instance.ResumeGame();
 
-        // Reanudar música del menú
-        if (AudioManager.Instance != null)
+        // NUEVO: Verificamos si la música de la intro sigue sonando
+        IntroSequence intro = FindObjectOfType<IntroSequence>(true);
+        bool isIntroPlaying = intro != null && intro.introAudio != null && intro.introAudio.isPlaying;
+
+        if (AudioManager.Instance != null && !isIntroPlaying)
+        {
             AudioManager.Instance.ResumeMenuMusic();
+        }
     }
 
     public void OnVolumeChanged(float value)
@@ -146,7 +161,11 @@ public class UIManager : MonoBehaviour
                         GameManager.Instance.ResumeGame();
                         // Generar la primera pieza
                         Spawner spawner = FindObjectOfType<Spawner>();
-                        if (spawner != null) spawner.SpawnTetromino();
+                        if (spawner != null) 
+                        {
+                            spawner.ResetSpawner(); // ¡Borramos la memoria vieja!
+                            spawner.SpawnTetromino();
+                        }
                         
                         // Pausar música del menú
                         if (AudioManager.Instance != null)
@@ -163,7 +182,11 @@ public class UIManager : MonoBehaviour
                 {
                     GameManager.Instance.ResumeGame();
                     Spawner spawner = FindObjectOfType<Spawner>();
-                    if (spawner != null) spawner.SpawnTetromino();
+                    if (spawner != null) 
+                    {
+                        spawner.ResetSpawner();
+                        spawner.SpawnTetromino();
+                    }
                 }
             });
         }
@@ -176,7 +199,7 @@ public class UIManager : MonoBehaviour
         }
     }
 
-    public void OnPauseButton()
+        public void OnPauseButton()
     {
         if (GameManager.Instance.isPaused)
         {
@@ -184,9 +207,7 @@ public class UIManager : MonoBehaviour
             GameManager.Instance.ResumeGame();
             if (pausePanel != null) pausePanel.SetActive(false);
             
-            // Reanudar música de gameplay donde estaba
-            if (GameplayMusicManager.Instance != null)
-                GameplayMusicManager.Instance.ResumeMusic();
+            // Ya no pausamos la música aquí
         }
         else
         {
@@ -194,9 +215,7 @@ public class UIManager : MonoBehaviour
             GameManager.Instance.PauseGame();
             if (pausePanel != null) pausePanel.SetActive(true);
             
-            // Pausar música de gameplay
-            if (GameplayMusicManager.Instance != null)
-                GameplayMusicManager.Instance.PauseMusic();
+            // Ya no pausamos la música aquí
         }
     }
 
@@ -273,18 +292,25 @@ public class UIManager : MonoBehaviour
                 UpdateLevel(1);
 
                 GameManager.Instance.PauseGame();
+                
+                // MUEVE ESTO AQUÍ: Detenemos el menú justo antes del 3, 2, 1.
+                if (AudioManager.Instance != null)
+                    AudioManager.Instance.StopMusic();
 
                 if (countdownScreen != null)
                 {
                     countdownScreen.StartCountdown(() =>
                     {
                         GameManager.Instance.ResumeGame();
+                        // Reemplaza esto en ambos botones:
                         Spawner spawner = FindObjectOfType<Spawner>();
-                        if (spawner != null) spawner.SpawnTetromino();
+                        if (spawner != null) 
+                        {
+                            spawner.ResetSpawner(); // ¡Borramos la memoria vieja!
+                            spawner.SpawnTetromino();
+                        }
                         
-                        // Pausar música del menú
-                        if (AudioManager.Instance != null)
-                            AudioManager.Instance.PauseMenuMusic();
+                        // Quita el StopMusic() de aquí adentro, ya lo pusimos arriba.
                         
                         // Iniciar música de gameplay
                         if (GameplayMusicManager.Instance != null)
@@ -310,44 +336,6 @@ public class UIManager : MonoBehaviour
         }
     }
 
-    public void OnMenuButton()
-    {
-        if (AudioManager.Instance != null)
-        {
-            AudioManager.Instance.StopAllSfx();
-            AudioManager.Instance.PlayButtonSound();
-        }
-
-        // Parar música de gameplay
-        if (GameplayMusicManager.Instance != null)
-            GameplayMusicManager.Instance.StopMusic();
-
-        // Reanudar música del menú
-        if (AudioManager.Instance != null)
-            AudioManager.Instance.ResumeMenuMusic();
-
-        if (gameOverPanel != null) gameOverPanel.SetActive(false);
-        GameManager.Instance.playerName = "";
-        GameManager.Instance.ResumeGame();
-
-        // Limpiar tablero
-        Board board = FindObjectOfType<Board>();
-        if (board != null) board.ClearBoard();
-
-        if (loadingScreen != null)
-        {
-            loadingScreen.StartLoading(() =>
-            {
-                ShowMenu();
-            });
-        }
-        else
-        {
-            ShowMenu();
-        }
-    }
-
-    // Ir al menú desde el panel de PAUSA
     public void OnPauseMenuButton()
     {
         if (AudioManager.Instance != null)
@@ -355,21 +343,23 @@ public class UIManager : MonoBehaviour
             AudioManager.Instance.StopAllSfx();
             AudioManager.Instance.PlayButtonSound();
         }
-        if (pausePanel != null) pausePanel.SetActive(false);
-        GameManager.Instance.ResumeGame();
 
-        // Limpiar tablero
+        // --- SOLUCIÓN DE MÚSICA COMBINADA ---
+        if (GameplayMusicManager.Instance != null)
+            GameplayMusicManager.Instance.StopMusic();
+
+        if (pausePanel != null) pausePanel.SetActive(false);
+        
+        // Limpiamos el tablero ANTES de reanudar el tiempo del juego
         Board board = FindObjectOfType<Board>();
         if (board != null) board.ClearBoard();
-
+        
+        GameManager.Instance.ResumeGame(); 
         GameManager.Instance.playerName = "";
-
+        
         if (loadingScreen != null)
         {
-            loadingScreen.StartLoading(() =>
-            {
-                ShowMenu();
-            });
+            loadingScreen.StartLoading(() => { ShowMenu(); });
         }
         else
         {
@@ -389,5 +379,25 @@ public class UIManager : MonoBehaviour
         bool countdownActive = countdownScreen != null && countdownScreen.gameObject.activeSelf;
         
         return gamePanel.activeSelf && !menuActive && !pauseActive && !gameOverActive && !loadingActive && !countdownActive;
+    }
+
+    public void OpenSettings()
+{
+    if (AudioManager.Instance != null) AudioManager.Instance.PlayButtonSound();
+    if (settingsPanel != null) settingsPanel.SetActive(true);
+}
+
+public void CloseSettings()
+{
+    if (AudioManager.Instance != null) AudioManager.Instance.PlayButtonSound();
+    if (settingsPanel != null) settingsPanel.SetActive(false);
+}
+
+public void OnFullscreenToggle(bool isFullscreen)
+    {
+        Screen.fullScreen = isFullscreen;
+        
+        if (AudioManager.Instance != null) 
+            AudioManager.Instance.PlayButtonSound();
     }
 }

@@ -83,6 +83,28 @@ public class Spawner : MonoBehaviour
         if (display != null) display.UpdateHoldDisplay(heldPieceIndex);
     }
 
+    /// <summary>
+    /// Resetea la memoria del generador para un juego nuevo.
+    /// </summary>
+    public void ResetSpawner()
+    {
+        heldPieceIndex = -1; // Borra la pieza guardada
+        canHold = true;
+        nextPiecesQueue.Clear(); // Limpia las próximas piezas
+        
+        // Genera 2 nuevas para el nuevo juego
+        nextPiecesQueue.Enqueue(Random.Range(0, tetrominos.Length));
+        nextPiecesQueue.Enqueue(Random.Range(0, tetrominos.Length));
+        
+        // Actualiza la UI para vaciar los recuadros
+        NextPiecesDisplay display = FindObjectOfType<NextPiecesDisplay>();
+        if (display != null)
+        {
+            display.UpdateDisplay(GetNextPieces());
+            if (display.holdPieceImage != null) display.holdPieceImage.enabled = false;
+        }
+    }
+
     public int[] GetNextPieces()
     {
         return nextPiecesQueue.ToArray();

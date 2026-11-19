@@ -34,7 +34,8 @@ public class Tetromino : MonoBehaviour
 
     void Update()
     {
-        if (GameManager.Instance.isPaused) return;
+        // Añadimos la protección "|| board == null" para evitar que piezas huérfanas causen errores rojos.
+        if (GameManager.Instance.isPaused || board == null) return;
 
         fallTimer -= Time.deltaTime;
 
@@ -129,23 +130,28 @@ public class Tetromino : MonoBehaviour
     /// </summary>
     void CreateGhostPiece()
     {
-        // 1. Instanciamos una copia exacta de este GameObject
         ghostPiece = Instantiate(gameObject, transform.position, transform.rotation);
         
-        // 2. Destruimos el script 'Tetromino' del clon para que no caiga ni lea inputs
-        Destroy(ghostPiece.GetComponent<Tetromino>());
+        // ¡LA SOLUCIÓN! Apagamos el script inmediatamente antes de destruirlo.
+        // Así evitamos que el fantasma ejecute su propio Start() y cree más clones.
+        Tetromino ghostScript = ghostPiece.GetComponent<Tetromino>();
+        if (ghostScript != null)
+        {
+            ghostScript.enabled = false;
+            Destroy(ghostScript);
+        }
 
-        // 3. Modificamos el color de todos sus bloques para hacerlos transparentes
+        // Le cambiamos el nombre para distinguirlo en tu jerarquía
+        ghostPiece.name = "GhostPiece_" + gameObject.name;
+
         SpriteRenderer[] renderers = ghostPiece.GetComponentsInChildren<SpriteRenderer>();
         foreach (SpriteRenderer sr in renderers)
         {
             Color color = sr.color;
             color.a = 0.3f; // 30% de opacidad
             sr.color = color;
-            // Opcional: sr.sortingOrder = -1; para que siempre esté por detrás
         }
 
-        // Posicionarlo por primera vez
         UpdateGhostPiece();
     }
 
@@ -278,19 +284,19 @@ public class Tetromino : MonoBehaviour
     /// </summary>
     bool IsValidPosition(Transform testTransform)
     {
+        // Si el tablero no existe en este milisegundo, cancelamos la validación.
+        if (board == null) return false; 
+
         foreach (Transform block in testTransform)
         {
             Vector2 pos = board.Round(block.position);
             
-            // Límites laterales e inferior
             if ((int)pos.x < 0 || (int)pos.x >= board.width || (int)pos.y < 0)
                 return false;
                 
-            // Límite superior
             if ((int)pos.y >= board.height)
                 continue;
                 
-            // Colisión con otros bloques fijos
             if (board.grid[(int)pos.x, (int)pos.y] != null)
                 return false;
         }
